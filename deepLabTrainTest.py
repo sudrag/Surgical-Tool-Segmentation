@@ -86,6 +86,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
             loss = criterion(outputs, masks.long())
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             running_loss += loss.item()
 
@@ -130,8 +131,12 @@ real_train_mask_dir2 = "sisvse_dataset/miccai2022_sisvse_dataset/semantic_masks/
 real_train_mask_dir3 = "sisvse_dataset/miccai2022_sisvse_dataset/semantic_masks/real_train_3"
 
 # Testing data paths: Use sean translation data (for example, the manual_syn version)
-test_image_dir = "sisvse_dataset/miccai2022_sisvse_dataset/images/sean_spade_translation/sean/manual_syn"
-test_mask_dir = "sisvse_dataset/miccai2022_sisvse_dataset/semantic_masks/sean_spade_translation/sean/manual_syn"
+# Test dataset: using a validation set
+test_image_dir = "sisvse_dataset/miccai2022_sisvse_dataset/images/real"
+test_mask_dir  = "sisvse_dataset/miccai2022_sisvse_dataset/semantic_masks/real_val_1"
+
+# test_image_dir = "sisvse_dataset/miccai2022_sisvse_dataset/images/sean_spade_translation/sean/manual_syn"
+# test_mask_dir = "sisvse_dataset/miccai2022_sisvse_dataset/semantic_masks/sean_spade_translation/sean/manual_syn"
 
 
 # ========================
@@ -183,7 +188,7 @@ model = model.to(device)
 
 # Loss and Optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.005, weight_decay=1e-5)  # Increased lr, lowered weight_decay
+optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.8)
 
 
