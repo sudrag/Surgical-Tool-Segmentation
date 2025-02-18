@@ -133,7 +133,9 @@ real_train_mask_dir3 = "sisvse_dataset/miccai2022_sisvse_dataset/semantic_masks/
 # Testing data paths: Use sean translation data (for example, the manual_syn version)
 # Test dataset: using a validation set
 test_image_dir = "sisvse_dataset/miccai2022_sisvse_dataset/images/real"
-test_mask_dir  = "sisvse_dataset/miccai2022_sisvse_dataset/semantic_masks/real_val_1"
+test_mask_dir1  = "sisvse_dataset/miccai2022_sisvse_dataset/semantic_masks/real_val_1"
+test_mask_dir2  = "sisvse_dataset/miccai2022_sisvse_dataset/semantic_masks/real_val_2"
+test_mask_dir3  = "sisvse_dataset/miccai2022_sisvse_dataset/semantic_masks/real_val_3"
 
 # test_image_dir = "sisvse_dataset/miccai2022_sisvse_dataset/images/sean_spade_translation/sean/manual_syn"
 # test_mask_dir = "sisvse_dataset/miccai2022_sisvse_dataset/semantic_masks/sean_spade_translation/sean/manual_syn"
@@ -170,7 +172,16 @@ train_dataset = ConcatDataset([
 ])
 
 # Load testing dataset (using sean translation data)
-test_dataset = SISVSEDataset(test_image_dir, test_mask_dir, transform=transform)
+test_dataset1 = SISVSEDataset(test_image_dir, test_mask_dir1, transform=transform)
+test_dataset2 = SISVSEDataset(test_image_dir, test_mask_dir2, transform=transform)
+test_dataset3 = SISVSEDataset(test_image_dir, test_mask_dir3, transform=transform)
+
+
+test_dataset = ConcatDataset([
+    test_dataset1,
+    test_dataset2,
+    test_dataset3
+])
 
 # Create DataLoaders
 train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True)
