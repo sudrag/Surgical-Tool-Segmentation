@@ -12,7 +12,11 @@ from tqdm import tqdm
 import torch.nn as nn
 import torch.optim as optim
 from torchvision.models.segmentation import deeplabv3_resnet50, DeepLabV3_ResNet50_Weights
-from torchvision.transforms import RandomHorizontalFlip, RandomRotation, ColorJitter  # New import
+from torchvision.transforms import RandomHorizontalFlip, RandomRotation, ColorJitter 
+from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+from sam2.build_sam import build_sam2_hf
+
+
 
 # Mapping categories to tools (1) or organs (2)
 CATEGORY_MAP = {
@@ -113,6 +117,58 @@ def evaluate_model(model, dataloader):
     return sum(iou_scores) / len(iou_scores)
 
 
+def evaluate_sam2(test_loader, model_type="vit_h"):
+    """
+    Evaluate Meta's SAM2 on the test set.
+    For each test image, the SAM2 automatic mask generator is used to produce segmentation masks.
+    The mask with the highest stability score is selected as the predicted foreground.
+    Ground truth masks are binarized (all non-zero pixels are considered foreground).
+    IoU is computed in a binary manner.
+    """
+    # Load SAM2 model using build_sam2_hf (using the tiny configuration)
+    sam = build_sam2_hf("facebook/sam2-hiera-tiny", device="cuda", mode="eval")
+    mask_generator = SAM2AutomaticMaskGenerator(sam)
+    # Force single mask output, if supported (this may help yield a more precise prediction)
+    mask_generator.multimask_output = False
+    
+    iou_scores = []
+    for images, masks in test_loader:
+        for img_tensor, gt_mask in zip(images, masks):
+            # Convert image tensor to a NumPy array and reverse normalization
+            image_np = img_tensor.cpu().numpy().transpose(1, 2, 0)
+            mean = np.array([0.485, 0.456, 0.406])
+            std = np.array([0.229, 0.224, 0.225])
+            image_np = (image_np * std + mean)
+            image_np = np.clip(image_np, 0, 1) * 255
+            image_arr = image_np.astype(np.uint8)
+            
+            # Generate masks using SAM2
+            sam_masks = mask_generator.generate(image_arr)
+            if len(sam_masks) == 0:
+                # If no mask is generated, use an empty mask
+                pred_mask = np.zeros((image_arr.shape[0], image_arr.shape[1]), dtype=bool)
+            else:
+                # Select the mask with the highest stability score
+                best_mask = max(sam_masks, key=lambda m: m.get('stability_score', 0))
+                pred_mask = best_mask['segmentation']
+            
+            # Resize the predicted mask to 256x256 to match ground truth dimensions
+            pred_mask = np.array(Image.fromarray(pred_mask.astype(np.uint8)*255)
+                                 .resize((256, 256), resample=Image.NEAREST))
+            pred_mask = (pred_mask > 128).astype(np.uint8)
+            
+            # Binarize the ground truth mask (all non-zero pixels are foreground)
+            gt_mask_np = gt_mask.cpu().numpy()
+            gt_mask_bin = (gt_mask_np > 0).astype(np.uint8)
+            
+            # Compute binary IoU using jaccard_score
+            iou = jaccard_score(gt_mask_bin.flatten(), pred_mask.flatten(), average="binary")
+            iou_scores.append(iou)
+    return np.mean(iou_scores)
+
+
+
+
 # ========================
 # Path Setup
 # ------------------------
@@ -204,11 +260,16 @@ scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.8)
 
 
 # Train the Model
-train_model(model, train_loader, test_loader, criterion, optimizer, scheduler,num_epochs=20)
+train_model(model, train_loader, test_loader, criterion, optimizer, scheduler,num_epochs=1)
 
 # Evaluate on Test Data
 test_iou = evaluate_model(model, test_loader)
-print(f"Test IoU: {test_iou:.4f}")
+print(f"DeepLabV3 ResNet50 Test IoU: {test_iou:.4f}")
+
+# Evaluate SAM2 on Test Data
+sam_iou = evaluate_sam2(test_loader, model_type="vit_h")
+print(f"SAM2 Test IoU: {sam_iou:.4f}")
+
 
 # Save the Model
 torch.save(model.state_dict(), "sisvse_model.pth")
