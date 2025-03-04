@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-segmentation_experiment.py
+DeepLab_Segformer_NNSegmentation.py
 
 This script trains and evaluates two semantic segmentation models on a custom dataset.
 Models used:
